@@ -2,6 +2,9 @@ const fs = require("fs");
 const https = require("https");
 
 const BASE_URL = "https://web.aynaott.com";
+const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+const REFERER = "https://web.aynaott.com/";
+
 const categories = [
   "all", "bangla", "sports", "kolkata", "indian", "news", 
   "movies", "music", "islamic", "kids", "documentary", "entertainment"
@@ -60,7 +63,7 @@ function fetchData(url) {
   return new Promise((resolve) => {
     const req = https.get(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": USER_AGENT,
         "Accept": "*/*",
         "RSC": "1"
       }
@@ -70,12 +73,12 @@ function fetchData(url) {
       res.on("end", () => resolve(data));
     });
     req.on("error", () => resolve(""));
-    req.setTimeout(3000, () => { req.destroy(); resolve(""); });
+    req.setTimeout(4000, () => { req.destroy(); resolve(""); });
   });
 }
 
 async function processData() {
-  console.log("চ্যানেলের ডাটা সংগ্রহ করা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...");
+  console.log("চ্যানেলের ডাটা ফেচ করা হচ্ছে...");
 
   const urls = [];
   for (const cat of categories) {
@@ -144,7 +147,7 @@ async function processData() {
     });
   }
 
-  // সর্টিং করা
+  // সর্টিং
   extractedChannels.sort((a, b) => {
     const catIndexA = categoryOrder.indexOf(a.category);
     const catIndexB = categoryOrder.indexOf(b.category);
@@ -156,35 +159,48 @@ async function processData() {
     return a.name.localeCompare(b.name);
   });
 
-  // M3U ফাইল তৈরি
-  let m3uContent = '#EXTM3U url-tvg="" x-tvg-url=""\n';
-  for (const ch of extractedChannels) {
-    m3uContent += `#EXTINF:-1 group-title="${ch.category}" tvg-name="${ch.name}" tvg-logo="${ch.logo}", ${ch.name}\n`;
-    m3uContent += `#EXTVLCOPT:http-user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64)\n`;
-    m3uContent += `#EXTVLCOPT:http-referrer=https://web.aynaott.com/\n`;
-    m3uContent += `${ch.url}\n`;
-  }
+  const totalChannelsCount = extractedChannels.length;
 
-  fs.writeFileSync("ayna_ott.json", JSON.stringify(extractedChannels, null, 2));
-  fs.writeFileSync("ayna_ott.m3u", m3uContent);
-
-  // --- ক্যাটাগরি ভিত্তিক স্ট্যাটাস গণনা ---
+  // ক্যাটাগরি সামারি তৈরি
   const categorySummary = {};
   for (const ch of extractedChannels) {
     categorySummary[ch.category] = (categorySummary[ch.category] || 0) + 1;
   }
 
-  // --- সুন্দর স্ট্যাটাস আউটপুট প্রিন্ট ---
-  console.log("\n==============================================");
-  console.log("            📊 চ্যানেল স্ট্যাটাস রিপোর্ট            ");
-  console.log("==============================================");
-  for (const [cat, count] of Object.entries(categorySummary)) {
-    console.log(` 🔹 ${cat.padEnd(16)} : ${count} টি চ্যানেল`);
+  // ==========================================
+  // ১. M3U প্লেলিস্টের ভিতরে স্ট্যাটাস যুক্ত করা
+  // ==========================================
+  let m3uContent = `#EXTM3U\n`;
+  m3uContent += `## TOTAL CHANNELS: ${totalChannelsCount}\n`;
+  m3uContent += `## LAST UPDATED: ${new Date().toISOString()}\n\n`;
+
+  // প্লেয়ারের স্ক্রিনে সবার উপরে স্ট্যাটাস চ্যানেল হিসেবে দেখানোর জন্য:
+  const statusLogo = "https://raw.githubusercontent.com/iptv-org/iptv/master/logos/IPTV.png";
+  m3uContent += `#EXTINF:-1 group-title="📊 STATUS" tvg-name="TOTAL CHANNELS" tvg-logo="${statusLogo}", 📢 TOTAL CHANNELS: ${totalChannelsCount}\n`;
+  m3uContent += `https://web.aynaott.com/\n\n`;
+
+  // বাকি আসল চ্যানেলগুলো যুক্ত করা
+  for (const ch of extractedChannels) {
+    m3uContent += `#EXTINF:-1 group-title="${ch.category}" tvg-name="${ch.name}" tvg-logo="${ch.logo}",${ch.name}\n`;
+    m3uContent += `${ch.url}|User-Agent=${encodeURIComponent(USER_AGENT)}&Referer=${encodeURIComponent(REFERER)}\n`;
   }
-  console.log("----------------------------------------------");
-  console.log(` ✅ মোট যুক্ত করা হয়েছে  : ${extractedChannels.length} টি চ্যানেল`);
-  console.log(" 📁 ফাইল সংরক্ষণ সফল    : ayna_ott.json & ayna_ott.m3u");
-  console.log("==============================================\n");
+
+  // ==========================================
+  // ২. JSON ফাইলের ভিতরে স্ট্যাটাস যুক্ত করা
+  // ==========================================
+  const jsonOutput = {
+    status: "success",
+    total_channels: totalChannelsCount,
+    updated_at: new Date().toLocaleString("en-US", { timeZone: "Asia/Dhaka" }),
+    category_counts: categorySummary,
+    channels: extractedChannels
+  };
+
+  fs.writeFileSync("ayna_ott.json", JSON.stringify(jsonOutput, null, 2));
+  fs.writeFileSync("ayna_ott.m3u", m3uContent);
+
+  console.log(`\n✅ সফলভাবে তৈরি হয়েছে! মোট চ্যানেল: ${totalChannelsCount} টি`);
+  console.log(`📁 ayna_ott.m3u এবং ayna_ott.json ফাইল আপডেট হয়েছে।\n`);
 }
 
 processData();
