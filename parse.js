@@ -78,7 +78,7 @@ function fetchData(url) {
 }
 
 async function processData() {
-  console.log("চ্যানেলের ডাটা ফেচ করা হচ্ছে...");
+  console.log("ডাটা ফেচ করা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...");
 
   const urls = [];
   for (const cat of categories) {
@@ -161,28 +161,28 @@ async function processData() {
 
   const totalChannelsCount = extractedChannels.length;
 
-  // ক্যাটাগরি সামারি তৈরি
+  // ক্যাটাগরি অনুযায়ী চ্যানেল সংখ্যা গণনা
   const categorySummary = {};
   for (const ch of extractedChannels) {
     categorySummary[ch.category] = (categorySummary[ch.category] || 0) + 1;
   }
 
   // ==========================================
-  // ১. M3U প্লেলিস্টের ভিতরে স্ট্যাটাস যুক্ত করা
+  // ১. M3U প্লেলিস্ট তৈরি (VLC Media Player ফরম্যাট)
   // ==========================================
-  let m3uContent = `#EXTM3U\n`;
-  m3uContent += `## TOTAL CHANNELS: ${totalChannelsCount}\n`;
-  m3uContent += `## LAST UPDATED: ${new Date().toISOString()}\n\n`;
+  let m3uContent = '#EXTM3U url-tvg="" x-tvg-url=""\n';
 
-  // প্লেয়ারের স্ক্রিনে সবার উপরে স্ট্যাটাস চ্যানেল হিসেবে দেখানোর জন্য:
+  // প্লেলিস্টে মোট চ্যানেলের স্ট্যাটাস চ্যানেল (সবার উপরে)
   const statusLogo = "https://raw.githubusercontent.com/iptv-org/iptv/master/logos/IPTV.png";
-  m3uContent += `#EXTINF:-1 group-title="📊 STATUS" tvg-name="TOTAL CHANNELS" tvg-logo="${statusLogo}", 📢 TOTAL CHANNELS: ${totalChannelsCount}\n`;
+  m3uContent += `#EXTINF:-1 group-title="📊 STATUS" tvg-name="TOTAL CHANNELS" tvg-logo="${statusLogo}",📢 TOTAL CHANNELS: ${totalChannelsCount}\n`;
   m3uContent += `https://web.aynaott.com/\n\n`;
 
-  // বাকি আসল চ্যানেলগুলো যুক্ত করা
+  // চ্যানেলগুলো VLC ফরম্যাটে সাজানো
   for (const ch of extractedChannels) {
     m3uContent += `#EXTINF:-1 group-title="${ch.category}" tvg-name="${ch.name}" tvg-logo="${ch.logo}",${ch.name}\n`;
-    m3uContent += `${ch.url}|User-Agent=${encodeURIComponent(USER_AGENT)}&Referer=${encodeURIComponent(REFERER)}\n`;
+    m3uContent += `#EXTVLCOPT:http-user-agent=${USER_AGENT}\n`;
+    m3uContent += `#EXTVLCOPT:http-referrer=${REFERER}\n`;
+    m3uContent += `${ch.url}\n`; // পিওর স্ট্রিম লিঙ্ক
   }
 
   // ==========================================
@@ -199,8 +199,8 @@ async function processData() {
   fs.writeFileSync("ayna_ott.json", JSON.stringify(jsonOutput, null, 2));
   fs.writeFileSync("ayna_ott.m3u", m3uContent);
 
-  console.log(`\n✅ সফলভাবে তৈরি হয়েছে! মোট চ্যানেল: ${totalChannelsCount} টি`);
-  console.log(`📁 ayna_ott.m3u এবং ayna_ott.json ফাইল আপডেট হয়েছে।\n`);
+  console.log(`\n✅ মোট চ্যানেল যুক্ত হয়েছে: ${totalChannelsCount} টি`);
+  console.log("📁 ayna_ott.m3u ও ayna_ott.json ফাইলে স্ট্যাটাসসহ সেভ করা হয়েছে!\n");
 }
 
 processData();
