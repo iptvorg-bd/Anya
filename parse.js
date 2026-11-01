@@ -70,12 +70,12 @@ function fetchData(url) {
       res.on("end", () => resolve(data));
     });
     req.on("error", () => resolve(""));
-    req.setTimeout(3000, () => { req.destroy(); resolve(""); }); // ৩ সেকেন্ড টাইমআউট
+    req.setTimeout(3000, () => { req.destroy(); resolve(""); });
   });
 }
 
 async function processData() {
-  console.log("Fetching API responses in parallel...");
+  console.log("চ্যানেলের ডাটা সংগ্রহ করা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...");
 
   const urls = [];
   for (const cat of categories) {
@@ -84,7 +84,6 @@ async function processData() {
     }
   }
 
-  // সমান্তরালভাবে দ্রুত ফেচ করা
   const results = await Promise.all(urls.map(url => fetchData(url)));
   const rawData = results.join("\n");
 
@@ -145,6 +144,7 @@ async function processData() {
     });
   }
 
+  // সর্টিং করা
   extractedChannels.sort((a, b) => {
     const catIndexA = categoryOrder.indexOf(a.category);
     const catIndexB = categoryOrder.indexOf(b.category);
@@ -156,6 +156,7 @@ async function processData() {
     return a.name.localeCompare(b.name);
   });
 
+  // M3U ফাইল তৈরি
   let m3uContent = '#EXTM3U url-tvg="" x-tvg-url=""\n';
   for (const ch of extractedChannels) {
     m3uContent += `#EXTINF:-1 group-title="${ch.category}" tvg-name="${ch.name}" tvg-logo="${ch.logo}", ${ch.name}\n`;
@@ -166,7 +167,24 @@ async function processData() {
 
   fs.writeFileSync("ayna_ott.json", JSON.stringify(extractedChannels, null, 2));
   fs.writeFileSync("ayna_ott.m3u", m3uContent);
-  console.log(`Successfully fetched total ${extractedChannels.length} channels!`);
+
+  // --- ক্যাটাগরি ভিত্তিক স্ট্যাটাস গণনা ---
+  const categorySummary = {};
+  for (const ch of extractedChannels) {
+    categorySummary[ch.category] = (categorySummary[ch.category] || 0) + 1;
+  }
+
+  // --- সুন্দর স্ট্যাটাস আউটপুট প্রিন্ট ---
+  console.log("\n==============================================");
+  console.log("            📊 চ্যানেল স্ট্যাটাস রিপোর্ট            ");
+  console.log("==============================================");
+  for (const [cat, count] of Object.entries(categorySummary)) {
+    console.log(` 🔹 ${cat.padEnd(16)} : ${count} টি চ্যানেল`);
+  }
+  console.log("----------------------------------------------");
+  console.log(` ✅ মোট যুক্ত করা হয়েছে  : ${extractedChannels.length} টি চ্যানেল`);
+  console.log(" 📁 ফাইল সংরক্ষণ সফল    : ayna_ott.json & ayna_ott.m3u");
+  console.log("==============================================\n");
 }
 
 processData();
